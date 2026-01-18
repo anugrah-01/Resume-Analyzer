@@ -1,35 +1,53 @@
 import jwt from "jsonwebtoken";
+
 const authMiddleware = (req, res, next) => {
-    try {
-        // 1. Read Authorization header
-        const authHeader = req.headers.authorization;
-    
-        // 2. Check if header exists
-        if (!authHeader) {
-            return res.status(401).json({ message: "Authorization header missing" });
-        } 
-    
-        // 3. Extract token (Bearer <token>)
-        const token = authHeader.split(" ")[1];
-        if(!token){
-            return res.status(401).json({ message: "Token missing" });
-        }
-    
-        // 4. Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-        // 5. Attach user info to request
-        req.user = decoded;
-    
-        // 6. Move to next middleware / controller, moves request forward
-        next();
-    
-    } catch (error) {
-        return res.status(401).json({ message: "Invalid or expired token" });
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      const err = new Error("Authorization header missing");
+      err.status = 401;
+      throw err;
     }
+
+    // Ensure Bearer format
+    if (!authHeader.startsWith("Bearer ")) {
+      const err = new Error("Invalid authorization format");
+      err.status = 401;
+      throw err;
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      const err = new Error("Token missing");
+      err.status = 401;
+      throw err;
+    }
+
+    //verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Attach only required fields (security best practice)
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role
+    };
+
+    next();
+  } catch (error) {
+    error.status = error.status || 401;
+    next(error); // forward to central error handler
+  }
 };
 
 export default authMiddleware;
+
+/*Authentication is handled using JWT middleware. The token is validated from the Authorization header,
+ decoded user information is attached to the request, and errors are forwarded
+to a centralized error handler to keep responses consistent*/
+
 
 
 /*Client ──▶ Middleware ──▶ Controller ──▶ DB
