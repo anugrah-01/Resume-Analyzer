@@ -2,12 +2,14 @@ import jwt from "jsonwebtoken";   //Imports JWT library-Used to generate authent
 import bcrypt from "bcrypt";      //Used to hash passwords
 import pool from "../config/db.js";
 
-export const register = async (req, res) => {    //async because DB and bcrypt operations are asynchronous
+export const register = async (req, res, next) => {    //async because DB and bcrypt operations are asynchronous
     try {
         const{email, password} = req.body;
 
         if(!email || !password){
-            return res.status(400).json({ message: "Email and password required" });
+          const err = new Error("Email and password are required");
+          err.status = 400;
+          throw err;
         }
 
         const userExists = await pool.query(
@@ -15,7 +17,9 @@ export const register = async (req, res) => {    //async because DB and bcrypt o
         );
 
         if (userExists.rows.length > 0) {
-            return res.status(409).json({ message: "User already exists" });
+          const err = new Error("User already exists");
+          err.status = 409;
+          throw err;
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -29,14 +33,19 @@ export const register = async (req, res) => {    //async because DB and bcrypt o
         res.status(201).json({ message: "User registered successfully" });  
 
     } catch (error) {
-        console.error(err);
-        res.status(500).json({ message: "Server error" });
+        next(error);
     }  
 };
 
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
     try {
       const { email, password } = req.body;
+
+      if (!email || !password) {
+        const err = new Error("Email and password are required");
+        err.status = 400;
+        throw err;
+      }
 
       // 1. Find user
       const result = await pool.query(
@@ -44,7 +53,9 @@ export const login = async (req, res) => {
       );
 
       if (result.rows.length === 0) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        const err = new Error("Invalid credentials");
+        err.status = 401;
+        throw err;
       }
 
       const user = result.rows[0];
@@ -53,7 +64,9 @@ export const login = async (req, res) => {
       const isMatch = await bcrypt.compare(password, user.password);
       
       if (!isMatch) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        const err = new Error("Invalid credentials");
+        err.status = 401;
+        throw err;  
       }
 
       // 3. Generate JWT - Identifies user in future requests
@@ -66,8 +79,7 @@ export const login = async (req, res) => {
       res.json({ token });
 
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
+      next(error);
     }
 };
 
